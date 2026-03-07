@@ -1,102 +1,132 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
+require('dotenv').config();
 
 const app = express();
-const PORT = 5500;
-const MESSAGES_FILE = path.join(__dirname, 'messages.json');
+const PORT = process.env.PORT || 5500;
 
-// Ensure messages.json exists
-if (!fs.existsSync(MESSAGES_FILE)) {
-    fs.writeFileSync(MESSAGES_FILE, JSON.stringify([]));
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname)));
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+    console.warn("=================================================");
+    console.warn("WARNING: MONGODB_URI is not set!");
+    console.warn("Complaints will not be saved to the database.");
+    console.warn("=================================================");
+} else {
+    mongoose.connect(MONGODB_URI)
+        .then(() => console.log('Connected to MongoDB successfully'))
+        .catch(err => console.error('MongoDB connection error:', err));
 }
 
-// ==================== MIDDLEWARE ====================
-app.use(cors({ origin: '*' }));
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Logging middleware
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
+// Define Schema and Model
+const messageSchema = new mongoose.Schema({
+    name: String,
+    message: String,
+    timestamp: String,
+    timestampInMs: Number
 });
+const Message = mongoose.model('Message', messageSchema);
 
-app.use(express.static(__dirname));
-
-// ==================== ROUTES ====================
-
-// Test route
-app.get('/api/test', (req, res) => {
-    res.json({ success: true, message: 'Server is working!' });
-});
-
-// Submit message (PUBLIC)
-app.post('/api/submit-message', (req, res) => {
+// Endpoint to handle form submissions
+app.post('/api/submit-message', async (req, res) => {
     try {
-        console.log('Message submission - Body:', req.body);
-
         const { name, message } = req.body;
 
-        if (!message || message.trim() === '') {
-            return res.status(400).json({ success: false, error: 'Message cannot be empty' });
+        if (!name || !message) {
+            return res.status(400).json({ success: false, error: 'Name and message are required' });
         }
 
-        const id = Date.now();
-        const timestamp = new Date().toLocaleString();
-
-        // Read existing messages
-        const data = fs.readFileSync(MESSAGES_FILE, 'utf8');
-        let messages = [];
-        if (data) {
-            messages = JSON.parse(data);
-        }
-
-        // Add new message
-        const newMessage = {
-            id,
-            name: name || 'Unknown',
-            message: message.trim(),
-            timestamp
-        };
-        messages.push(newMessage);
-
-        // Save back to file
-        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 4));
-
-        console.log('✓ Message saved to file - ID:', id);
-        res.json({
-            success: true,
-            message: 'Message stored successfully',
-            id: id
+        const newMessage = new Message({
+            name: name,
+            message: message,
+            timestamp: new Date().toISOString(),
+            timestampInMs: Date.now()
         });
+
+        if (MONGODB_URI) {
+            await newMessage.save();
+            console.log('Saved to MongoDB:', newMessage);
+        } else {
+            console.log('Simulation (MongoDB not configured): Would have saved:', newMessage);
+        }
+
+        res.json({ success: true, message: 'Message securely saved to database' });
+
     } catch (error) {
-        console.error('❌ Error storing message:', error);
-        res.status(500).json({ success: false, error: 'Failed to store message: ' + error.message });
+        console.error('Error saving message:', error);
+        res.status(500).json({ success: false, error: 'Failed to save message' });
     }
 });
 
-// 404 Handler
-app.use((req, res) => {
-    console.log('❌ 404 - Route not found:', req.path);
-    res.status(404).json({ error: 'Route not found: ' + req.path });
+// Secret link to view complaints directly in the browser
+app.get('/view-complaints-secret', async (req, res) => {
+    try {
+        if (!MONGODB_URI) {
+            return res.send(`
+                <div style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h2>MongoDB is not configured yet!</h2>
+                    <p>To view your complaints here, please add your <b>MONGODB_URI</b> to your Vercel Environment Variables.</p>
+                </div>
+            `);
+        }
+
+        const messages = await Message.find().sort({ timestampInMs: -1 });
+
+        let htmlResponse = `
+            <html>
+            <head>
+                <title>Secret Complaints Viewer</title>
+                <style>
+                    body { font-family: monospace; background: #111; color: #0f0; padding: 20px; line-height: 1.6; }
+                    h1 { color: #fff; border-bottom: 2px solid #555; padding-bottom: 10px; }
+                    .complaint { background: #222; padding: 20px; margin-bottom: 20px; border-left: 5px solid #0f0; border-radius: 5px; }
+                    .name { font-weight: bold; font-size: 1.3em; color: #fff; margin-bottom: 5px;}
+                    .time { color: #888; font-size: 0.9em; margin-bottom: 15px;}
+                    .msg { color: #ddd; font-size: 1.1em; white-space: pre-wrap; background: #1a1a1a; padding: 15px; border-radius: 4px;}
+                    .no-messages { color: #888; font-size: 1.2em; font-style: italic; }
+                </style>
+            </head>
+            <body>
+                <h1>Confidential Complaints Database</h1>
+                <p>Total Complaints: ${messages.length}</p>
+                <br>
+        `;
+
+        if (messages.length === 0) {
+            htmlResponse += '<div class="no-messages">No complaints have been submitted yet.</div>';
+        } else {
+            messages.forEach(msg => {
+                htmlResponse += `
+                    <div class="complaint">
+                        <div class="name">👤 Name: ${msg.name || 'Anonymous'}</div>
+                        <div class="time">🕒 Date: ${new Date(msg.timestamp).toLocaleString()}</div>
+                        <div class="msg">${msg.message}</div>
+                    </div>
+                `;
+            });
+        }
+
+        htmlResponse += `</body></html>`;
+        res.send(htmlResponse);
+
+    } catch (error) {
+        console.error("Error fetching messages:", error);
+        res.status(500).send("Error reading database. Please check server logs.");
+    }
 });
 
-// ==================== START SERVER ====================
+// Fallback to serving the frontend files
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.listen(PORT, () => {
-    console.log('\n=====================================');
-    console.log('✓ 🚀 SERVER STARTED SUCCESSFULLY 🚀');
-    console.log('=====================================');
-    console.log(`✓ Running at: http://localhost:${PORT}`);
-    console.log(`✓ Submit messages: http://localhost:${PORT}/index.html`);
-    console.log(`✓ Complaints are saved in: messages.json`);
-    console.log('=====================================\n');
-});
-
-process.on('uncaughtException', (error) => {
-    console.error('❌ UNCAUGHT EXCEPTION:', error);
+    console.log(`Server is running on port ${PORT}`);
 });
