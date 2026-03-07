@@ -38,10 +38,6 @@
         {
             "src": "/view-complaints-secret",
             "dest": "server.js"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/$1"
         }
     ]
 }
