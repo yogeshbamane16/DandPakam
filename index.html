@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+
+<head>
+
+    <title>Aparichit</title>
+
+    <link rel="icon" href="Images/Icon.jpg">
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+    <div class="intro-box">
+        <input type="text" id="userName" placeholder="अपना नाम दर्ज करें (Enter your name)" required autocomplete="off">
+        <br> <br>
+        <button onclick="saveName()">ENTER</button>
+    </div>
+
+    <script>
+        function saveName() {
+            const name = document.getElementById('userName').value.trim();
+            if (!name) {
+                alert('Please enter your name to proceed!');
+                return;
+            }
+            localStorage.setItem('complainerName', name);
+            window.location.href = 'Home Page.html';
+        }
+    </script>
+</body>
+
+</html>
