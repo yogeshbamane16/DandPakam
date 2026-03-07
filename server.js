@@ -83,6 +83,22 @@ app.post('/api/submit-message', async (req, res) => {
     }
 });
 
+// API to delete a specific complaint
+app.delete('/api/delete-message/:id', async (req, res) => {
+    try {
+        await connectDB();
+        const result = await Message.findByIdAndDelete(req.params.id);
+        if (result) {
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ success: false, error: 'Message not found' });
+        }
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete' });
+    }
+});
+
 // Secret link to view complaints directly in the browser
 app.get('/view-complaints-secret', async (req, res) => {
     try {
@@ -107,11 +123,13 @@ app.get('/view-complaints-secret', async (req, res) => {
                 <style>
                     body { font-family: monospace; background: #111; color: #0f0; padding: 20px; line-height: 1.6; }
                     h1 { color: #fff; border-bottom: 2px solid #555; padding-bottom: 10px; }
-                    .complaint { background: #222; padding: 20px; margin-bottom: 20px; border-left: 5px solid #0f0; border-radius: 5px; }
+                    .complaint { background: #222; padding: 20px; margin-bottom: 20px; border-left: 5px solid #0f0; border-radius: 5px; position: relative; }
                     .name { font-weight: bold; font-size: 1.3em; color: #fff; margin-bottom: 5px;}
                     .time { color: #888; font-size: 0.9em; margin-bottom: 15px;}
                     .msg { color: #ddd; font-size: 1.1em; white-space: pre-wrap; background: #1a1a1a; padding: 15px; border-radius: 4px;}
                     .no-messages { color: #888; font-size: 1.2em; font-style: italic; }
+                    .delete-btn { position: absolute; top: 10px; right: 10px; background: #ff3333; color: #fff; border: none; padding: 6px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+                    .delete-btn:hover { background: #cc0000; }
                 </style>
             </head>
             <body>
@@ -125,7 +143,8 @@ app.get('/view-complaints-secret', async (req, res) => {
         } else {
             messages.forEach(msg => {
                 htmlResponse += `
-                    <div class="complaint">
+                    <div class="complaint" id="complaint-${msg._id}">
+                        <button class="delete-btn" onclick="deleteComplaint('${msg._id}')">🗑 DELETE</button>
                         <div class="name">👤 Name: ${msg.name || 'Anonymous'}</div>
                         <div class="time">🕒 Date: ${msg.timestamp}</div>
                         <div class="msg">${msg.message}</div>
@@ -134,7 +153,24 @@ app.get('/view-complaints-secret', async (req, res) => {
             });
         }
 
-        htmlResponse += `</body></html>`;
+        htmlResponse += `
+                <script>
+                    async function deleteComplaint(id) {
+                        if (!confirm('Are you sure you want to delete this complaint?')) return;
+                        try {
+                            const res = await fetch('/api/delete-message/' + id, { method: 'DELETE' });
+                            const data = await res.json();
+                            if (data.success) {
+                                document.getElementById('complaint-' + id).remove();
+                            } else {
+                                alert('Failed to delete: ' + (data.error || 'Unknown error'));
+                            }
+                        } catch(e) {
+                            alert('Error deleting complaint');
+                        }
+                    }
+                </script>
+            </body></html>`;
         res.send(htmlResponse);
 
     } catch (error) {
