@@ -64,7 +64,7 @@ app.post('/api/submit-message', async (req, res) => {
         const newMessage = new Message({
             name: name,
             message: message,
-            timestamp: new Date().toISOString(),
+            timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
             timestampInMs: Date.now()
         });
 
@@ -127,7 +127,7 @@ app.get('/view-complaints-secret', async (req, res) => {
                 htmlResponse += `
                     <div class="complaint">
                         <div class="name">👤 Name: ${msg.name || 'Anonymous'}</div>
-                        <div class="time">🕒 Date: ${new Date(msg.timestamp).toLocaleString()}</div>
+                        <div class="time">🕒 Date: ${msg.timestamp}</div>
                         <div class="msg">${msg.message}</div>
                     </div>
                 `;
