@@ -12,17 +12,32 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname)));
 
-// MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-    console.warn("=================================================");
-    console.warn("WARNING: MONGODB_URI is not set!");
-    console.warn("Complaints will not be saved to the database.");
-    console.warn("=================================================");
-} else {
-    mongoose.connect(MONGODB_URI)
-        .then(() => console.log('Connected to MongoDB successfully'))
-        .catch(err => console.error('MongoDB connection error:', err));
+
+// Cached connection for Serverless environments
+let cachedDb = null;
+
+async function connectDB() {
+    if (cachedDb) {
+        return cachedDb;
+    }
+    if (!MONGODB_URI) {
+        console.warn("WARNING: MONGODB_URI is not set!");
+        return null;
+    }
+
+    try {
+        console.log('Connecting to MongoDB...');
+        const db = await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000 // Error out quickly instead of hanging
+        });
+        cachedDb = db;
+        console.log('Successfully connected to MongoDB.');
+        return db;
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        throw err;
+    }
 }
 
 // Define Schema and Model
@@ -37,6 +52,9 @@ const Message = mongoose.model('Message', messageSchema);
 // Endpoint to handle form submissions
 app.post('/api/submit-message', async (req, res) => {
     try {
+        // IMPORTANT: Must await database connection inside the serverless function
+        await connectDB();
+
         const { name, message } = req.body;
 
         if (!name || !message) {
@@ -61,7 +79,7 @@ app.post('/api/submit-message', async (req, res) => {
 
     } catch (error) {
         console.error('Error saving message:', error);
-        res.status(500).json({ success: false, error: 'Failed to save message' });
+        res.status(500).json({ success: false, error: 'Failed to save message. Check server logs.' });
     }
 });
 
@@ -76,6 +94,9 @@ app.get('/view-complaints-secret', async (req, res) => {
                 </div>
             `);
         }
+
+        // IMPORTANT: Must await connection inside the serverless function
+        await connectDB();
 
         const messages = await Message.find().sort({ timestampInMs: -1 });
 
