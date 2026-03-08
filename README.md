@@ -1,2 +1,2 @@
 # Aparichit - The Stranger
-Anyaay karne waalon saza jaroor milegi
+Anyaay karne waalon ko saza jaroor milegi
