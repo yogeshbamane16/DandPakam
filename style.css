@@ -5,10 +5,13 @@
 }
 
 body {
-    height: 100vh;
-    width: 100vw;
+    min-height: 100vh;
+    width: 100%;
     background-image: url("Images/Hell.png");
     background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
     display: flex;
     align-items: start;
     justify-content: center;
@@ -42,6 +45,8 @@ button:hover {
     border-radius: 10px;
     border: 1px solid red;
     margin-top: 5rem;
+    width: 90%;
+    max-width: 500px;
 }
 
 #userName {
@@ -52,7 +57,8 @@ button:hover {
     border: 1px solid red;
     background: rgba(255, 255, 255, 0.1);
     color: white;
-    width: 300px;
+    width: 100%;
+    max-width: 300px;
 }
 
 #userName::placeholder {
